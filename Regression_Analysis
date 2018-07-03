@@ -1,0 +1,1084 @@
+/* Establishing a permanent library to extract D84 campaign data files */
+
+libname respapr 'E:\Q1 2018 Experian Extract\To Aruna\2017 Radius Mailing Response Analysis\D84 Response';
+
+/*Address standardization on D84 analysis file by creating VAR1 and VAR3 */
+
+data d84_analysis; /*Netdown file from Rick*/
+ set respapr.mailed_after_amc_netdown;
+
+/* Creating var1 and var3 fields to standardize addresses for consistency and merging it with the responder file */
+
+informat var1 $79.;
+format var1 $79.;
+
+informat var3 $79.;
+format var3 $79.;
+
+informat MailingStreet $61.;
+format MailingStreet $61.;
+
+Apt_Start = 0;
+Apt_Start1 = 0;
+Apt_Start2 = 0;
+Apt_Start3 = 0;
+Unit_Start = 0;
+Suite_Start = 0;
+Suite_Start1 = 0;
+Suite_Start2 = 0;
+Suite_Start3 = 0;
+Num_Start = 0;
+
+  standardized_address = trim(primary_address)||" "||trim(secondary_address);
+ var1 = trim(standardized_address)||" "||substr(zip_code,1,5);
+   var1 = upcase(var1);
+   var1 = compress(var1);
+
+     MailingStreet = Standardized_address;
+
+  If standardized_address not in (" ") then do;
+
+Apt_Start1 = Index(MailingStreet,' APT.');
+	Apt_Start2 = IndexW(MailingStreet,' APT'); /*insert IndexW to avoid logic finding apt in middle of word like Captain John Smith Road */
+	Apt_Start3 = IndexW(MailingStreet, ' APARTMENT');
+	Apt_Start = Apt_Start1 + Apt_Start2 + Apt_Start3;
+
+
+If Apt_Start1 > 0 then do;
+    	suffix_type = 'APT ';
+		suffix_number = substr(MailingStreet,Apt_Start1+5);
+		suffix_address = trim(suffix_type)||trim(suffix_number);
+		temp_address = substr(MailingStreet,1,Apt_Start1-1);
+	  end;
+
+	  If Apt_Start2 > 0 then do;
+    	suffix_type = 'APT ';
+		suffix_number = substr(MailingStreet,Apt_Start2+4);
+		suffix_address = trim(suffix_type)||trim(suffix_number);
+		temp_address = substr(MailingStreet,1,Apt_Start2-1);
+	  end;
+
+	  If Apt_Start3 > 0 then do;
+    	suffix_type = 'APT ';
+		suffix_number = substr(MailingStreet,Apt_Start3+10);
+		suffix_address = trim(suffix_type)||trim(suffix_number);
+		temp_address = substr(MailingStreet,1,Apt_Start3-1);
+
+	  end;
+
+	 Unit_Start = IndexW(MailingStreet,' UNIT'); /*insert IndexW to avoid logic finding unit in middle of word like Unity Road*/
+	  
+      If Unit_Start > 0 then do;
+	   suffix_type = 'UNIT ';
+	   suffix_number = substr(MailingStreet,Unit_Start+5);
+	   suffix_address = trim(suffix_type)||trim(suffix_number);
+	   temp_address = substr(MailingStreet,1,Unit_Start-1);
+	  end;
+
+	  Suite_Start1 = IndexW(MailingStreet,' SUITE');
+	  Suite_Start2 = IndexW(MailingStreet,' STE');/*insert IndexW to avoid logic finding STE in middle of word like Stevens Road */
+	  Suite_Start3 = Index(MailingStreet,' STE.');
+	  Suite_Start = Suite_Start1 + Suite_Start2 + Suite_Start3;
+
+	  If Suite_Start1 > 0 then do;
+	   suffix_type = 'STE ';
+	   suffix_number = substr(MailingStreet,Suite_Start1+6);
+	   suffix_address = trim(suffix_type)||trim(suffix_number);
+	   temp_address = substr(MailingStreet,1,Suite_Start1-1);
+	  end;
+
+	  If Suite_Start2 > 0 then do;
+	   suffix_type = 'STE ';
+	   suffix_number = substr(MailingStreet,Suite_Start2+4);
+	   suffix_address = trim(suffix_type)||trim(suffix_number);
+	   temp_address = substr(MailingStreet,1,Suite_Start2-1);
+	  end;
+
+	  If Suite_Start3 > 0 then do;
+	   suffix_type = 'STE ';
+	   suffix_number = substr(MailingStreet,Suite_Start3+5);
+	   suffix_address = trim(suffix_type)||trim(suffix_number);
+	   temp_address = substr(MailingStreet,1,Suite_Start3-1);
+	  end;
+
+
+	  Num_Start = Index(MailingStreet,' #');
+
+	   If Num_Start > 0 then do;
+	    suffix_type = '# ';
+	    suffix_number = substr(MailingStreet,Num_Start+2);
+		suffix_address = trim(suffix_type)||trim(suffix_number);
+		temp_address = substr(MailingStreet,1,Num_Start-1);
+	   end;
+
+If suffix_address not in (" ") then do;
+
+  alternate_suffix_address = trim(temp_address)||" "||trim(suffix_number); 
+  
+  end;
+	   
+ if suffix_address not in (' ') then do;
+      var3 = substr(temp_address,1,10)||(suffix_number)||substr(zip_code,1,5);  
+	  var3 = compress(var3);
+	   var3 = upcase (var3);
+	   end;
+
+if suffix_address in (' ') then do;
+	 var3 = substr(MailingStreet,1,10)||substr(zip_code,1,5);
+	  var3 = compress(var3);
+	   var3 = upcase (var3);
+	   end;
+
+TEMPLAST = substr(last_name, 1,3);
+
+var6 = primary_address || substr(zip_code, 1,5) || templast;
+var6 = compress(var6);
+var6 = upcase (var6);
+random = ranuni(18);
+
+end;
+run;
+
+/* var 6 = Concatenation of primary address, zip code and last name at the end. Last name should be in the same format which is the first 3 letters
+of last name. In mail file, take first 3 bytes of last name field in mail file. TEMPLAST = substr(lastname, 1,3). Compress it and upcase it. 
+
+var6 = 
+
+/***** Add Validation Steps to ensure that VAR1 and VAR3 Logic are parsing addresses correctly *********/
+
+proc sort data = d84_analysis out = temp_audit; by random; run;
+
+/* Creating Audit Files */
+
+data audit_apt audit_suite audit_unit audit_num audit_nosuffix;
+ set temp_audit;
+ if Apt_Start > 0 then output audit_apt;
+ If Num_Start > 0 then output audit_num;
+ If Unit_Start > 0 then output audit_unit;
+ If Suite_Start > 0 then output audit_suite;
+ If Suffix_Address in (' ') then output  audit_nosuffix;
+ run;
+
+ data audit_apt; set audit_apt; if _n_ <= 30;
+ data audit_suite; set audit_suite; if _n_ <= 15;
+ data audit_unit; set audit_unit; if _n_ <= 15;
+ data audit_num; set audit_num; if _n_ <= 15;
+ data audit_nosuffix; set audit_nosuffix; if _n_ <= 25;
+ run;
+
+ data audit;
+  set audit_apt audit_suite audit_unit audit_num audit_nosuffix;
+  run;
+
+/* Creating Audit Reports */
+
+proc print data = audit;
+ var mailingstreet zip_code var1 var3 templast var6; 
+Title 'Validation of VAR1 and VAR3 with Random Samples of Suffix and Non-Suffix Records';
+run;
+
+data check;
+ set d84_analysis;
+ if suffix_address not in (" ");
+ run;
+
+ /* Address standardization on Responder File by creating VAR1 and VAR3 */
+
+data responder; set respapr.responder;
+
+ format address $40.;
+ format city $30.;
+ format var1 $79.;
+ 
+ informat address $40.;
+ informat city $30.;
+ informat var1 $79.;
+
+ 
+informat var3 $79.;
+format var3 $79.;
+
+length_zip = length(compress(Zip));
+if length_zip = 4 then zip_full = compress('0'||Zip);
+if length_zip = 5 then zip_full = compress (Zip);
+
+ address = address;
+ temp_final_address = upcase(address);
+  
+ city = City;
+  var1 = trim(address)||" "||substr(zip_full,1,5);
+   var1 = upcase(var1);
+   var1 = compress(var1);
+
+    
+/********* suffix logic *******/
+informat MailingStreet $40.;
+MailingStreet = temp_final_Address;
+
+Apt_Start1 = Index(MailingStreet,' APT.');
+	Apt_Start2 = IndexW(MailingStreet,' APT'); /*insert IndexW to avoid logic finding apt in middle of word like Captain John Smith Road */
+	Apt_Start3 = IndexW(MailingStreet, ' APARTMENT');
+	Apt_Start = Apt_Start1 + Apt_Start2 + Apt_Start3;
+
+
+If Apt_Start1 > 0 then do;
+    	suffix_type = 'APT ';
+		suffix_number = substr(MailingStreet,Apt_Start1+5);
+		suffix_address = trim(suffix_type)||trim(suffix_number);
+		temp_address = substr(MailingStreet,1,Apt_Start1-1);
+	  end;
+
+	  If Apt_Start2 > 0 then do;
+    	suffix_type = 'APT ';
+		suffix_number = substr(MailingStreet,Apt_Start2+4);
+		suffix_address = trim(suffix_type)||trim(suffix_number);
+		temp_address = substr(MailingStreet,1,Apt_Start2-1);
+     end;
+
+	  If Apt_Start3 > 0 then do;
+    	suffix_type = 'APT ';
+		suffix_number = substr(MailingStreet,Apt_Start3+10);
+		suffix_address = trim(suffix_type)||trim(suffix_number);
+		temp_address = substr(MailingStreet,1,Apt_Start3-1);
+
+	  end;
+
+	 Unit_Start = IndexW(MailingStreet,' UNIT'); /*insert IndexW to avoid logic finding unit in middle of word like Unity Road*/
+	  
+      If Unit_Start > 0 then do;
+	   suffix_type = 'UNIT ';
+	   suffix_number = substr(MailingStreet,Unit_Start+5);
+	   suffix_address = trim(suffix_type)||trim(suffix_number);
+	   temp_address = substr(MailingStreet,1,Unit_Start-1);
+	  end;
+
+	  Suite_Start1 = IndexW(MailingStreet,' SUITE');
+	  Suite_Start2 = IndexW(MailingStreet,' STE');/*insert IndexW to avoid logic finding STE in middle of word like Stevens Road */
+	  Suite_Start3 = Index(MailingStreet,' STE.');
+	  Suite_Start = Suite_Start1 + Suite_Start2 + Suite_Start3;
+
+	  If Suite_Start1 > 0 then do;
+	   suffix_type = 'STE ';
+	   suffix_number = substr(MailingStreet,Suite_Start1+6);
+	   suffix_address = trim(suffix_type)||trim(suffix_number);
+	   temp_address = substr(MailingStreet,1,Suite_Start1-1);
+	  end;
+
+	  If Suite_Start2 > 0 then do;
+	   suffix_type = 'STE ';
+	   suffix_number = substr(MailingStreet,Suite_Start2+4);
+	   suffix_address = trim(suffix_type)||trim(suffix_number);
+	   temp_address = substr(MailingStreet,1,Suite_Start2-1);
+	  end;
+
+	  If Suite_Start3 > 0 then do;
+	   suffix_type = 'STE ';
+	   suffix_number = substr(MailingStreet,Suite_Start3+5);
+	   suffix_address = trim(suffix_type)||trim(suffix_number);
+	   temp_address = substr(MailingStreet,1,Suite_Start3-1);
+	  end;
+
+
+	  Num_Start = Index(MailingStreet,' #');
+
+	   If Num_Start > 0 then do;
+	    suffix_type = '# ';
+	    suffix_number = substr(MailingStreet,Num_Start+2);
+		suffix_address = trim(suffix_type)||trim(suffix_number);
+		temp_address = substr(MailingStreet,1,Num_Start-1);
+	   end;
+
+If suffix_address not in (" ") then do;
+
+  alternate_suffix_address = trim(temp_address)||" "||trim(suffix_number); 
+  
+  end;
+
+ if suffix_address not in (' ') then do;
+      var3 = substr(temp_address,1,10)||(suffix_number)||substr(zip,1,5);  
+	  var3 = compress(var3);
+	   var3 = upcase (var3);
+	   end;
+
+if suffix_address in (' ') then do;
+	 var3 = substr(MailingStreet,1,10)||substr(zip,1,5);
+	  var3 = compress(var3);
+	   var3 = upcase (var3);
+	   end;
+
+if suffix_address not in (' ') then do;
+      var6 = temp_address || substr(zip,1,5) || var5;  
+	  var6 = compress(var6);
+	   var6 = upcase (var6);
+	   end;
+
+if suffix_address in (' ') then do;
+	 var6 = MailingStreet ||substr(zip,1,5) || var5;
+	  var6 = compress(var6);
+	   var6 = upcase (var6);
+	   end;
+
+random = ranuni(18);
+
+run;
+
+/* Replicate var3 logic to create var6
+
+/***** Add Validation Steps to ensure that VAR1 and VAR3 Logic are parsing addresses correctly *********/
+
+proc sort data = responder out = temp_audit; by random; run;
+
+/* Creating Audit files */
+
+data audit_apt audit_suite audit_unit audit_num audit_nosuffix;
+ set temp_audit;
+ if Apt_Start > 0 then output audit_apt;
+ If Num_Start > 0 then output audit_num;
+ If Unit_Start > 0 then output audit_unit;
+ If Suite_Start > 0 then output audit_suite;
+ If Suffix_Address in (' ') then output  audit_nosuffix;
+ run;
+
+ data audit_apt; set audit_apt; if _n_ <= 30;
+ data audit_suite; set audit_suite; if _n_ <= 15;
+ data audit_unit; set audit_unit; if _n_ <= 15;
+ data audit_num; set audit_num; if _n_ <= 15;
+ data audit_nosuffix; set audit_nosuffix; if _n_ <= 25;
+ run;
+
+ data audit;
+  set audit_apt audit_suite audit_unit audit_num audit_nosuffix;
+  run;
+
+/* Creating Audit Reports */
+
+proc print data = audit;
+ var mailingstreet zip var1 var3 var4 var5 var6; 
+Title 'Validation of VAR1 and VAR3 with Random Samples of Suffix and Non-Suffix Recrods';
+run;
+
+data test; set responder; if state not in ('MA'); run;
+
+/* Identify duplicate records by address */
+
+proc sort data = d84_analysis nodupkey out = oops; by Pkey; run;
+proc sort data = d84_analysis nodupkey out = oops; by var1; run;
+
+data responder2 (drop = address city state zip); 
+ set responder;
+ response_address = address;
+ response_city = city;
+ response_state = state;
+ response_zip = zip;
+ responder = 1;
+ run;
+
+/* Sorting D84 analysis and Responder Files */
+
+proc sort data = d84_analysis nodupkey; by var1;run;
+proc sort data = responder2; by var1; run;
+
+/* Merging D84 Analysis and Responder Files on VAR1 */
+
+data analysis_file;
+ merge d84_analysis (in=a) responder2 (in=b);
+ by var1;
+ if a = 1;
+ run;
+
+/* Creating match file from merged file where Responder = 1 */
+
+data match_file_var1;
+ set analysis_file;
+ if responder = 1;
+ run;
+
+/* Creating permanent dataset of the merged file */
+
+data respapr.d84_analysis_file;
+ set analysis_file;
+ run;
+
+/* Creating permanent dataset of the matched file */
+
+ data respapr.d84_match_file_var1;
+  set match_file_var1;
+  run;
+
+/* Creating permanent dataset of the matched file for Bill with just pkey and akey */
+
+data respapr.d84_match_thin (keep = akey Pkey);
+ set respapr.d84_match_file_var1;
+ run;
+
+/************************************************  VAR3 MATCHING LOGIC **********************************************************/
+
+ data responder2 (drop = address city state zip); 
+ set responder;
+ response_address = address;
+ response_city = city;
+ response_state = state;
+ response_zip = zip;
+ responder = 1;
+ run;
+
+/* Sorting D82 Analysis and Responder Files */
+
+proc sort data = d84_analysis nodupkey; by var3;run;
+proc sort data = responder2; by var3; run;
+
+/* Merging D82 Analysis and Responder Files on VAR3 */
+
+data d84_analysis_file_VAR3;
+ merge d84_analysis (in=a) responder2 (in=b);
+ by var3;
+ if a = 1;
+ run;
+
+data match_file_var3;
+ set d84_analysis_file_var3;
+ if responder = 1;
+ run;
+
+/* Creating permanent dataset of the merged file */
+
+data respapr.d84_analysis_file_var3;
+ set d84_analysis_file_var3;
+ run;
+
+/* Creating permanent dataset of the matched file */
+
+ data respapr.d84_match_file_var3;
+  set match_file_var3;
+  run;
+
+
+/* Sorting VAR1 and VAR3 matched files on pkey */
+
+proc sort data = respapr.d84_match_file_var3; by pkey; run;
+proc sort data = respapr.d84_match_file_var1; by pkey; run;
+
+/* Merging VAR1 and VAR3 to determine if there are any additional matches */ 
+
+data incremental;
+merge respapr.d84_match_file_var3 (in=a) respapr.d84_match_file_var1 (in=b);
+by pkey;
+if a = 1 and b = 0;
+run;
+
+/* Report of incremental matches */
+
+proc print data = incremental;
+  var standardized_address response_address city response_city state response_state zip_code response_zip;
+  run;
+
+  proc print data = incremental;
+  var akey var1 var3 var4 var5 var6 first_name last_name primary_address response_address;
+  run;
+
+/* Eliminating false matches - more commonly found in addresses with P O Boxes */
+
+ data d84_match_wide_var3_inc;
+ set incremental;
+ PO_Box = 0;
+ PO_Box_Start = Index(var3,'POBOX');
+ If PO_Box_Start > 0 then PO_BOX = 1;
+ if po_box = 0;
+ run;
+
+/* Report of matches with true positive matches */
+
+ proc print data = d84_match_wide_var3_inc;
+  var akey var1 var3 var4 var5 first_name last_name zip_code primary_address secondary_address response_address response_zip;
+  run;
+
+/* Eliminating false matches */
+
+ data d84_true_incremental;
+    set d84_match_wide_var3_inc;
+ if akey in(4311100, 4279834, 4279835, 1048916, 4305567, 4305898, 4300496, 4309585, 4310145, 4276519, 4309235, 4304200, 4295273, 4309558
+            4299732, 4292010, 4282999, 4306510, 4299508, 4137979, 4283470, 4312120, 4288282, 4303682, 3940951, 706437, 4288701, 4274665, 4274441, 
+            4297678, 4307321, 4304487, 4279822, 4294956, 4279851, 4311864, 4300141, 4287641, 4274459, 4285380, 4296630, 4305074, 4299134,
+            4305553) then delete;
+run;
+
+/* Creating match file 1 from VAR1 matching */
+
+data d84_matchfile1 (keep = test_cell pkey var1 var3 var4 first_name var5 Last_name var6 akey  primary_address secondary_address city state zip_code opendate response_address
+response_city response_state response_zip responder);
+   set match_file_var1;
+ run;
+/* Creating match file 2 from VAR3 matching after eliminating false matches */
+
+ data d84_matchfile2 (keep = test_cell pkey var1 var3 var4 first_name var5 Last_name var6 akey  primary_address secondary_address city state zip_code opendate response_address
+response_city response_state response_zip responder);
+   set d84_true_incremental;
+ run;
+
+/* Combining match file 1 and match file 2 to create one dataset of all true matches */
+
+data d84_finalmatches;
+   set d84_matchfile1 d84_matchfile2;
+run;
+
+/* Sorting and Merging D84 analysis file and responder file on VAR6 - This will create a third matched file where records are matched on VAR6 */
+
+proc sort data = d84_analysis nodupkey; by var6;run;
+proc sort data = responder2; by var6; run;
+
+data d84_analysis_file_VAR6;
+ merge d84_analysis (in=a) responder2 (in=b);
+ by var6;
+ if a = 1;
+ run;
+
+data match_file_var6;
+ set d84_analysis_file_var6;
+ if responder = 1;
+ run;
+
+data respapr.d84_analysis_file_var6;
+ set d84_analysis_file_var6;
+ run;
+
+/* Creating permanent dataset of the matched file */
+
+ data respapr.d84_match_file_var6;
+  set match_file_var6;
+  run;
+
+/* Sorting VAR1 and VAR3 matched files on pkey */
+
+proc sort data = match_file_var6; by pkey; run;
+proc sort data = d84_finalmatches; by pkey; run;
+
+/* Merging VAR1 and VAR3 to determine if there are any additional matches */ 
+
+data incremental_var6;
+merge match_file_var6 (in=a) d84_finalmatches (in=b);
+by pkey;
+if a = 1 and b = 0;
+run;
+
+/* Report of incremental matches */
+
+proc print data = incremental_var6;
+  var standardized_address response_address city response_city state response_state zip_code response_zip var1 var3 var6;
+  run;
+
+  proc print data = incremental_var6;
+  var akey var1 var3 var4 var5 var6 first_name last_name primary_address response_address;
+  run;
+
+/* Final Matches - Including VAR6 */
+
+data incremental_var6_wide (keep = test_cell pkey var1 var3 var4 first_name var5 Last_name var6 akey  primary_address secondary_address city state zip_code opendate response_address
+response_city response_state response_zip responder);
+   set incremental_var6;
+run;
+
+/* Creating a wide version of the final matches */
+
+data respapr.d84_finalmatches;
+   set d84_finalmatches incremental_var6_wide;
+run;
+
+/* Creating a thin version of the final matches */
+
+data respapr.d84_finalmatches_thin (keep = akey pkey);
+   set respapr.d84_finalmatches;
+run;
+
+/* Creating Mail Date field - Mail Date for D82 campaign is Feb 22 2018 */
+
+data D84_analysis_file1;
+   set respapr.d84_finalmatches;
+format mail_date date9.;
+if test_cell in ('A1', 'A2', 'A4', 'A5', 'A6') then mail_date = '01MAY2018'd;
+if test_cell in ('A3', 'A7') then mail_date = '25APR2018'd;
+run; 
+
+/* Calculating days between open date and mail date */
+
+ data d84_analysis_file2;
+    set d84_analysis_file1;
+    days = DATDIF(mail_date, opendate, 'ACT/ACT'); /* Calculating no. of days between mail date and open date */
+run;
+
+/* Creating permanent dataset of final responder file with mail date and days fields added */
+
+data respapr.var1_var3_var6_combmatches;
+   set d84_analysis_file2;
+ run;
+
+/* Creating a thin version of the final responder for Bill */
+
+data respapr.var1_var3_var6_combmatches_thin (keep = pkey akey);
+   set d84_analysis_file2;
+ run;
+
+/* Response curve report - Frequency of responders by day on control response */
+
+ proc freq data = respapr.var1_var3_var6_combmatches;
+    table responder * days / list missing;
+    title 'Response Curve - Days since mailed';
+ run;
+
+ proc freq data = respapr.var1_var3_var6_combmatches;
+   table mail_date * opendate * responder / list missing;
+   title 'Response by maildate and opendate';
+ run;
+
+proc freq data = respapr.var1_var3_var6_combmatches;
+   table mail_date * opendate * days / list missing;
+   title 'Audit report of days calculation';
+ run;
+
+ /* Sorting raw analysis file and final responder file */
+
+proc sort data = respapr.mailed_after_amc_netdown; by pkey; run;
+proc sort data = respapr.var1_var3_var6_combmatches; by pkey; run;
+
+/* Creating a final analysis file - Merging raw control file with final responder file on pkey */
+
+data FinalAnalysis;
+merge respapr.mailed_after_amc_netdown (in=a) respapr.var1_var3_var6_combmatches(in=b);
+by pkey;
+if a = 1;
+if responder = '' then responder = 0;
+run;
+
+/* Establishing radius_distance bucket ranges */
+
+data FinalAnalysis1;
+   set FinalAnalysis;
+if radius_distance>0 and radius_distance<=1 then radius_distance_bucket = 1; 
+if radius_distance>1 and radius_distance<=2 then radius_distance_bucket = 2;
+if radius_distance>2 and radius_distance<=3 then radius_distance_bucket = 3;
+if radius_distance>3 and radius_distance<=4 then radius_distance_bucket = 4;
+if radius_distance>4 and radius_distance<=5 then radius_distance_bucket = 5;
+if radius_distance>=5 then radius_distance_bucket = 6;
+run;
+
+/* Establishing length of residence bucket ranges */
+
+data FinalAnalysis2;
+   set FinalAnalysis1;
+format lor_bucket $20.;
+informat lor_bucket $20.; 
+lor_num = 0;
+lor_num = lor;
+if lor = . then lor_bucket = 'NULL';
+if lor = 0 then lor_bucket = '0 year'; 
+if lor = 1 then lor_bucket = '1 year'; 
+if lor>=2 and lor<=5  then lor_bucket = '2-5 years';
+if lor>=6 and lor<=10 then lor_bucket = '6-10 years';
+if lor>=11 and lor<=15 then lor_bucket = '11-15 years';
+if lor>=16 and lor<=20 then lor_bucket = '16-19 years';
+if lor>=20 then lor_bucket = '20+ years';
+run;
+
+/* Creating LTV Buckets */
+
+data FinalAnalysis3;
+   set FinalAnalysis2;
+if ltv_num<=50 then ltv_bucket = 1; 
+if ltv_num>50 and ltv_num<=70 then ltv_bucket = 2;
+if ltv_num>70 and ltv_num<=90 then ltv_bucket = 3;
+if ltv_num>=90 then ltv_bucket = 4;
+run;
+
+/* Creating responder2 on final analysis file that includes responders */
+
+PROC SQL;
+create table respapr.Analysisfilewithresp as
+Select
+a.*,
+a.responder,
+(case 
+when a.days le 0 then 0
+when a.responder = 1 then 1
+end) as responder2
+from FinalAnalysis3 a;
+
+/* Audit of LOR Bucket */
+
+proc tabulate data = respapr.Analysisfilewithresp;
+   class lor_bucket;
+   var lor_num;
+   table lor_bucket all, (lor_num * f=6.3) * (mean min max sum n);
+   title 'LOR Bucket Audit';
+run;
+
+/* Response by Deposit Score */
+
+proc tabulate data = respapr.Analysisfilewithresp; 
+   class CFI_HH_DEPOSITS_SCORE ;
+   var responder;
+   table CFI_HH_DEPOSITS_SCORE all, (responder * f=10.5) * (mean min max sum n);
+   title 'Response by Deposit Score';
+run;
+
+/* Response by Distance Bucket */
+
+proc tabulate data = respapr.Analysisfilewithresp; 
+   class radius_distance_bucket ;
+   var responder;
+   table radius_distance_bucket all, (responder * f=10.5) * (mean min max sum n);
+   title 'Response by Distance Bucket';
+run;
+
+/* Response by Market Share Bucket */
+
+proc tabulate data = respapr.Analysisfilewithresp;
+   class Q118_ms_bucket;
+   var responder;
+   table Q118_ms_bucket all, (responder * f=10.5) * (mean min max sum n);
+   title 'Response by Market Share Bucket';
+run;
+
+/* Response by Priority Code */
+
+proc tabulate data = respapr.Analysisfilewithresp; 
+   class priority_code;
+   var responder;
+   table priority_code all, (responder * f=10.5) * (mean min max sum n);
+   title 'Response by Priority Code';
+run;
+
+/* Response by Test Cell */
+
+proc tabulate data = respapr.Analysisfilewithresp; 
+   class test_cell;
+   var responder;
+   table test_cell all, (responder * f=10.5) * (mean min max sum n);
+   title 'Response by Test Cell';
+run;
+
+/* Response by Age Bucket */
+
+proc tabulate data = respapr.Analysisfilewithresp; 
+   class age_bucket ;
+   var responder;
+   table age_bucket all, (responder * f=10.5) * (mean min max sum n);
+   title 'Response by Age Bucket';
+run;
+
+/* Response by Home Owner */
+
+proc tabulate data = respapr.Analysisfilewithresp; 
+   class homeowner ;
+   var responder;
+   table homeowner all, (responder * f=10.5) * (mean min max sum n);
+   title 'Response by Home Owner';
+run;
+
+/* Response by New Mover */
+
+proc tabulate data = respapr.Analysisfilewithresp; 
+   class newmover ;
+   var responder;
+   table newmover all, (responder * f=10.5) * (mean min max sum n);
+   title 'Response by New Mover';
+run;
+
+/* Response by LOR Bucket */
+
+proc tabulate data = respapr.Analysisfilewithresp; 
+   class lor_bucket;
+   var responder;
+   table lor_bucket all, (responder * f=10.5) * (mean min max sum n);
+   title 'Response by LOR';
+run;
+
+/* Response by Test Cell and Priority Code */
+
+proc tabulate data = respapr.Analysisfilewithresp;
+   class test_cell priority_code;
+   var responder;
+   table test_cell * priority_code all, (responder * f=10.5) * (mean min max sum n);
+   title 'Response by Test Cell and Priority Code';
+run;
+
+/* Response by Test Cell and Market Share Bucket */
+
+proc tabulate data = respapr.Analysisfilewithresp;
+   class test_cell q118_ms_bucket;
+   var responder;
+   table test_cell * q118_ms_bucket all, (responder * f=10.5) * (mean min max sum n);
+   title 'Response by Test Cell and Market Share Bucket';
+run;
+
+/* Response by Test Cell and Age Bucket */
+
+proc tabulate data = respapr.Analysisfilewithresp;
+   class test_cell age_bucket;
+   var responder;
+   table test_cell * age_bucket all, (responder * f=10.5) * (mean min max sum n);
+   title 'Response by Test Cell and Age Bucket';
+run;
+
+/* Response by Segment Code */
+
+proc tabulate data = respapr.Analysisfilewithresp; 
+   class segment_code;
+   var responder;
+   table segment_code all, (responder * f=10.5) * (mean min max sum n);
+   title 'Response by Segment Code';
+run;
+
+/* Response by Days - where days > 0 */
+/* Note: There are records with days < 0 in this subset and need to figure out how to handle in future */
+
+proc tabulate data = respapr.Analysisfilewithresp;
+   class days;
+   var responder;
+   table days all, (responder * f=10.5) * (mean min max sum n);
+   title 'Response by Days';
+run;
+
+/*Audit Report on Responder2 by Days */
+
+proc freq data = respapr.Analysisfilewithresp;
+   table days * responder2 * responder / list missing;
+   title 'Audit of Responder2 by Days';
+run;
+
+/* Response by Deposit Score */
+
+proc tabulate data = respapr.Analysisfilewithresp; 
+   class CFI_HH_DEPOSITS_SCORE ;
+   var responder2;
+   table CFI_HH_DEPOSITS_SCORE all, (responder2 * f=10.5) * (mean min max sum n);
+   title 'Responder2 by Deposit Score where days>0';
+run;
+
+/* Response by Distance Bucket */
+
+proc tabulate data = respapr.Analysisfilewithresp; 
+   class radius_distance_bucket ;
+   var responder2;
+   table radius_distance_bucket all, (responder2 * f=10.5) * (mean min max sum n);
+   title 'Responder2 by Distance Bucket where days>0';
+run;
+
+/* Response by Market Share Bucket */
+
+proc tabulate data = respapr.Analysisfilewithresp;
+   class Q118_ms_bucket;
+   var responder2;
+   table Q118_ms_bucket all, (responder2 * f=10.5) * (mean min max sum n);
+   title 'Responder2 by Market Share Bucket where days>0';
+run;
+
+/* Response by Priority Code */
+
+proc tabulate data = respapr.Analysisfilewithresp; 
+   class priority_code;
+   var responder2;
+   table priority_code all, (responder2 * f=10.5) * (mean min max sum n);
+   title 'Responder2 by Priority Code where days>0';
+run;
+
+/* Response by Test Cell */
+
+proc tabulate data = respapr.Analysisfilewithresp; 
+   class test_cell;
+   var responder2;
+   table test_cell all, (responder2 * f=10.5) * (mean min max sum n);
+   title 'Responder2 by Test Cell where days>0';
+run;
+
+/* Response by Age Bucket */
+
+proc tabulate data = respapr.Analysisfilewithresp; 
+   class age_bucket;
+   var responder2;
+   table age_bucket all, (responder2 * f=10.5) * (mean min max sum n);
+   title 'Responder2 by Age Bucket where days>0';
+run;
+
+/* Response by Home Owner */
+
+proc tabulate data = respapr.Analysisfilewithresp; 
+   class homeowner;
+   var responder2;
+   table homeowner all, (responder2 * f=10.5) * (mean min max sum n);
+   title 'Responder2 by Home Owner where days>0';
+run;
+
+/* Response by New Mover */
+
+proc tabulate data = respapr.Analysisfilewithresp; 
+   class newmover;
+   var responder2;
+   table newmover all, (responder2 * f=10.5) * (mean min max sum n);
+   title 'Responder2 by New Mover where days>0';
+run;
+
+/* Response by LOR Bucket*/
+
+proc tabulate data = respapr.Analysisfilewithresp; 
+   class lor_bucket;
+   var responder2;
+   table lor_bucket all, (responder2 * f=10.5) * (mean min max sum n);
+   title 'Responder2 by LOR where days>0';
+run;
+
+/* Response by Test Cell and Priority Code */
+
+proc tabulate data = respapr.Analysisfilewithresp;
+   class test_cell priority_code;
+   var responder2;
+   table test_cell * priority_code all, (responder2 * f=10.5) * (mean min max sum n);
+   title 'Responder2 by Test Cell and Priority Code where days>0';
+run;
+
+/* Response by Test Cell and Market Share Bucket */
+
+proc tabulate data = respapr.Analysisfilewithresp;
+   class test_cell q118_ms_bucket;
+   var responder2;
+   table test_cell * q118_ms_bucket all, (responder2 * f=10.5) * (mean min max sum n);
+   title 'Responder2 by Test Cell and Market Share Bucket where days>0';
+run;
+
+/* Response by Test Cell and Age Bucket */
+
+proc tabulate data = respapr.Analysisfilewithresp;
+   class test_cell age_bucket;
+   var responder2;
+   table test_cell * age_bucket all, (responder2 * f=10.5) * (mean min max sum n);
+   title 'Responder2 by Test Cell and Age Bucket where days>0';
+run;
+
+/* Response by Segment Code */
+
+proc tabulate data = respapr.Analysisfilewithresp; 
+   class segment_code;
+   var responder2;
+   table segment_code all, (responder2 * f=10.5) * (mean min max sum n);
+   title 'Responder2 by Segment Code where days>0';
+run;
+
+/* Response by Days - where days > 0 */ 
+/* Note: There are records with days < 0 in this subset and need to figure out how to handle in future */
+
+proc tabulate data = respapr.Analysisfilewithresp;
+   class days;
+   var responder2;
+   table days all, (responder2 * f=10.5) * (mean min max sum n);
+   title 'Responder2 by Days - where days > 0';
+run;
+
+/*---------------------------------------------------------------------------------------------------------------------------------------------*/
+
+/*Creating a dataset for performing further statistical analysis - Correlation and Regression */
+
+proc contents data = respapr.Analysisfilewithresp;
+run;
+
+/* Creating a dataset based on criteria variables - mailed_flag, days, newmover */
+
+libname regd84 'E:\Q1 2018 Experian Extract\To Aruna\2017 Radius Mailing Response Analysis\D84 Response\Regression Analysis';
+
+title 'D84 Model';
+
+PROC SQL;
+create table respapr.d84_sample as
+Select
+a.pkey,
+a.CFI_HH_DEPOSITS_SCORE,
+a.Q118_ms_bucket,
+a.income,
+a.responder2
+from respapr.Analysisfilewithresp a
+where a.Mailed_Flag EQ '1' AND a.newmover EQ 0;
+
+/* Dataset regression_analysis_file1 is processed using SPSS to create a model through logistic regression and scores/probabilities are calculated.
+Model dataset is then imported into SAS to compute score tiles */
+
+/*Final Model Equation*/
+/*
+Score = -5.062+0.080*depositscore-0.55*marketshare+0.029*income
+Prob = exp(score)/1+exp(score)*/
+
+proc freq data = respapr.d84_sample;
+   table cfi_hh_deposits_score q118_ms_bucket income;
+run;
+
+data analysisfilewithresp;
+   set respapr.analysisfilewithresp;
+if cfi_hh_deposits_score = 'A' then cfi_hh_deposits_score_r = 1;
+if cfi_hh_deposits_score = 'B' then cfi_hh_deposits_score_r = 2;
+if cfi_hh_deposits_score = 'C' then cfi_hh_deposits_score_r = 3;
+if cfi_hh_deposits_score = 'D' then cfi_hh_deposits_score_r = 4;
+if cfi_hh_deposits_score = 'E' then cfi_hh_deposits_score_r = 5;
+if cfi_hh_deposits_score = 'F' then cfi_hh_deposits_score_r = 6;
+if q118_ms_bucket = 'a20%plus' then q118_ms_bucket_r = 1;
+if q118_ms_bucket = 'b10<20%' then q118_ms_bucket_r = 2;
+if q118_ms_bucket = 'c5<10%' then q118_ms_bucket_r = 3;
+if q118_ms_bucket = 'under 5%' then q118_ms_bucket_r = 4;
+if income = 'A' then income_r = 1;
+if income = 'B' then income_r = 2;
+if income = 'C' then income_r = 3;
+if income = 'D' then income_r = 4;
+if income = 'E' then income_r = 5;
+if income = 'F' then income_r = 6;
+if income = 'G' then income_r = 7;
+if income = 'H' then income_r = 8;
+if income = 'I' then income_r = 9;
+if income = 'J' then income_r = 10;
+if income = 'K' then income_r = 11;
+if income = 'L' then income_r = 12;
+run;
+
+data respapr.d84modelanalysis;
+   set analysisfilewithresp;
+Score = -5.062+0.080*cfi_hh_deposits_score_r-0.55*q118_ms_bucket_r+0.029*income_r;
+Prob = exp(score)/1+exp(score);
+run;
+
+data scoring (keep = pkey responder score score2 prob prob2);
+   set respapr.d84modelanalysis;
+score2 = score;
+prob2 = prob;
+run;
+
+proc rank data = scoring out = outdata groups = 10; var score;run;
+
+data outdata2; set outdata; score_tile = score; run;
+
+proc tabulate data = outdata2;
+      class score_tile;
+      var score2;
+      table score_tile, (score2 *f=7.2)*  (min max mean n);
+	  title 'D84 Model Score Tiles';
+      run;
+
+data static_score (keep = pkey responder score prob score_tile);
+set scoring;
+score_tile = .;
+if score <= -6.33 then score_tile = 9;
+else if -6.33 <= score <= -6.25 then score_tile = 8;
+else if -6.25 <= score <= -6.12 then score_tile = 7;
+else if -6.12 <= score <= -5.91 then score_tile = 6;
+else if -5.91 <= score <= -5.73 then score_tile = 5;
+else if -5.73 <= score <= -5.62 then score_tile = 4;
+else if -5.62 <= score <= -5.49 then score_tile = 3;
+else if -5.49 <= score <= -5.20 then score_tile = 2;
+else if -5.20 <= score <= -5.07 then score_tile = 1;
+else if score >=-5.07 then score_tile = 0;
+run;
+
+proc tabulate data = static_score;
+  class score_tile / missing;
+  var responder;
+  table score_tile all, (responder * f=6.5) * (n mean sum min max);
+  title 'Response by Model Score - D84';
+  run;
+
+data respapr.model_score_decile_thin;
+   set static_score;
+run;
+
