@@ -1,0 +1,38 @@
+# Importing Libraries from Python
+
+import pandas as pd
+import numpy as np
+from matplotlib import pyplot as plt
+
+# Importing the Response Dataset for Plotting
+
+response = pd.read_csv('response.csv')
+
+# Viewing contents of response dataframe
+
+response
+response.resp
+
+# Plotting with Titles and Labels
+
+plt.plot (response.resp, response.income)
+plt.title ("Response by Income for Days>0")
+plt.xlabel ("Response")
+plt.ylabel ("Income")
+plt.show()
+
+# Comparison Response across campaigns
+
+oct = data[data.campaign == 'October']
+oct
+aug = data[data.campaign == 'August']
+aug
+
+# Plotting the comparisons
+
+plt.plot(oct.response, oct.income / 10**3)
+plt.plot(aug.response, aug.income / 10**3)
+plt.legend(['October', 'August'])
+plt.xlabel('Response')
+plt.ylabel('Income')
+plt.show()
