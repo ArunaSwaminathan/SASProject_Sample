@@ -239,12 +239,12 @@ password = dbutils.secrets.get( scope='vidmob-snowflake', key='password')
 
 # snowflake connection options
 options = {
-  "sfUrl": "https://sfa79964.us-east-1.snowflakecomputing.com",
+  "sfUrl": "xxxx",
   "sfUser": username,
   "sfPassword": password,
-  "sfDatabase": "ANALYTICS",
-  "sfSchema": "PUBLIC",
-  "sfWarehouse": "ANALYST"
+  "sfDatabase": "xxxx",
+  "sfSchema": "xxxx",
+  "sfWarehouse": "xxxx"
 }
 
 # COMMAND ----------
